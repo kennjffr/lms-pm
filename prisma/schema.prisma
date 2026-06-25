@@ -1,0 +1,122 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  ADMIN
+  TEACHER
+  STUDENT
+}
+
+enum SubmissionStatus {
+  SUBMITTED
+  GRADED
+}
+
+model User {
+  id              Int          @id @default(autoincrement())
+  email           String       @unique
+  passwordHash    String
+  name            String
+  role            Role         @default(STUDENT)
+  
+  // For students
+  programId       Int?
+  program         Program?     @relation(fields: [programId], references: [id], onDelete: SetNull)
+  currentSemester Int?         // 1 to 6
+  submissions     Submission[]
+
+  // For teachers
+  coursesTaught   Course[]
+
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}
+
+model Program {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  code        String   @unique // e.g., RPL, TKJ, DKV, ANI
+  description String
+  
+  courses     Course[]
+  students    User[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Course {
+  id          Int      @id @default(autoincrement())
+  name        String
+  code        String   @unique // e.g., RPL-101
+  description String
+  semester    Int      // 1 to 6
+
+  programId   Int
+  program     Program  @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  teacherId   Int
+  teacher     User     @relation(fields: [teacherId], references: [id], onDelete: Restrict)
+
+  materials   Material[]
+  assignments Assignment[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Material {
+  id        Int      @id @default(autoincrement())
+  title     String
+  content   String   @db.Text
+  fileUrl   String?  // MinIO object key/URL
+  fileName  String?  // Friendly original filename
+  
+  courseId  Int
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Assignment {
+  id          Int          @id @default(autoincrement())
+  title       String
+  description String       @db.Text
+  dueDate     DateTime
+  maxPoints   Int          @default(100)
+
+  courseId    Int
+  course      Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  
+  submissions Submission[]
+
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Submission {
+  id           Int              @id @default(autoincrement())
+  content      String?          @db.Text
+  fileUrl      String?          // MinIO path/URL for submission file
+  fileName     String?          // Original submitted file name
+  points       Int?
+  feedback     String?          @db.Text
+  status       SubmissionStatus @default(SUBMITTED)
+
+  studentId    Int
+  student      User             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  assignmentId Int
+  assignment   Assignment       @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@unique([studentId, assignmentId])
+}
